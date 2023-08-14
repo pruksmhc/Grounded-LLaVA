@@ -1,4 +1,5 @@
 import json
+from tqdm import tqdm
 # TODO: multiprocessing 
 USER_TEAMPLTE = "Where is the {object_name}? They might be at these locations {sam_bbox_outputs}"
 ASSISTANT_TEMPLATE = "The {object_name} is at {bbox_output}"
@@ -35,8 +36,49 @@ def preprocess_obj_detection(image_id, image_example):
         final_obj.append(conversation)
     return final_obj
 
-sam_outputs = json.load(open("sam_annots_test_final.json", "r"))
+def collate_jsons():
+    import os
+    import json
+
+    # Base directory path
+    base_dir = "/scratch/shared/beegfs/sagar/slurm_outputs/"
+
+    # Dictionary to store the collected data
+    collected_data = {}
+
+    # Loop through each directory by varying the IDX value
+    for idx in tqdm(range(20)):  # As IDX goes from 0 to 19 inclusive
+        current_dir = os.path.join(base_dir, f"10810_{idx}")
+        
+        # Check if directory exists
+        if os.path.exists(current_dir):
+            # List all files in the directory
+            for filename in os.listdir(current_dir)[:10]:
+                # Check if the file is a JSON file
+                if filename.endswith(".json"):
+                    # Construct the complete file path
+                    filepath = os.path.join(current_dir, filename)
+                    
+                    # Read the content of the JSON file
+                    with open(filepath, 'r') as json_file:
+                        content = json.load(json_file)
+                    
+                    # Extract the image ID from the filename by removing the extension
+                    image_id = os.path.splitext(filename)[0]
+                    
+                    # Store the content in the collected_data dictionary
+                    collected_data[image_id] = content
+
+    # Write the collected data into a single JSON file
+    output_path = "annots.json"
+    with open(output_path, 'w') as output_file:
+        json.dump(collected_data, output_file, indent=4)
+    
+    return collected_data
+
+
+sam_outputs = collate_jsons()
 final_res = []
 for image_id, values in sam_outputs.items():
     final_res.extend(preprocess_obj_detection(image_id, values))
-json.dump(final_res, open("llava_object_detection.json", "w"))
+json.dump(final_res, open("llava_object_detection.json", "w"), indent=4)
